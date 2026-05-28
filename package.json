@@ -9,6 +9,7 @@
     "debug": "node --inspect server.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "multer": "^2.0.2",

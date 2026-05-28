@@ -34,7 +34,7 @@ The application leverages **PDF.js** (specifically `pdfjs-dist`) to parse the in
 4.  **Classification**: Each page is analyzed against the color detection engine (detailed below).
 5.  **Assembly**: `pdf-lib` creates two new PDF documents. As pages are copied, the original page index is stamped at the bottom center.
 6.  **Encoding**: The resulting PDF buffers are converted to Base64 strings.
-7.  **Response**: The server returns a JSON payload containing metadata (page counts) and the `data:application/pdf;base64` URIs for immediate browser download.
+7.  **Response**: The server writes generated PDFs to a temporary result folder and returns metadata plus expiring download URLs.
 
 ---
 
@@ -48,12 +48,12 @@ The engine monitors the PDF operator list for color-setting commands:
 - `setFillCMYKColor`, `setStrokeCMYKColor`
 - `setFillColorN`, `setStrokeColorN`
 
-**Heuristic**: A color is considered "True Color" if the difference between its R, G, and B channels (or C, M, and Y channels) exceeds a small epsilon (0.01 for normalized values). Pure blacks, whites, and grays are ignored.
+**Heuristic**: A color is considered "True Color" when its RGB channel spread is above the noise floor and its HSV-style saturation is at least 0.12. This is more precise than channel spread alone because slightly warm/cool anti-aliased grays do not get promoted to color. CMYK colors still use the C/M/Y channel-difference epsilon (0.01 for normalized values). Pure blacks, whites, and grays are ignored.
 
 ### 2. Image Pixel Sampling
 For embedded images, the engine samples the raw byte data.
 - **Grayscale Images**: Automatically treated as B&W.
-- **RGB Images**: The engine checks for variance between R, G, and B channels. If `max(R,G,B) - min(R,G,B) > 8`, the pixel is flagged as colored.
+- **RGB Images**: The engine checks both RGB channel spread and HSV-style saturation. A pixel is flagged as colored when `max(R,G,B) - min(R,G,B) > 8` and `(max-min)/max >= 0.12`.
 
 ### 3. Exclude Region (Spatial Filtering)
 Users can define a rectangular region (in normalized 0-1 coordinates).
@@ -92,6 +92,8 @@ For extremely large PDFs (1000+ pages), processing is synchronous per-request. S
 
 ## 🔒 Security & Privacy
 
-- **Local Processing**: In the current version, files are processed on the host server and never sent to 3rd party cloud providers.
-- **No Persistence**: Uploaded files are deleted from the `uploads/` directory immediately after the response is sent.
+- **Host Server Processing**: Files are uploaded to the Node host server for temporary processing and are not sent to 3rd party cloud providers by the application.
+- **No Long-Term Persistence**: Source uploads are deleted after processing. Generated result files are stored temporarily for download and removed after the configured `RESULT_TTL_MS`.
+- **Transport Security**: Production deployments should terminate HTTPS at the hosting platform or reverse proxy. Set `FORCE_HTTPS=true` when the proxy forwards `X-Forwarded-Proto`.
+- **Abuse Protection**: Upload size, concurrent processing, and per-IP upload attempts are capped by environment variables.
 - **Memory Safety**: PDF buffers are handled as `Uint8Array` and `Buffer` objects, with explicit cleanup of PDF.js document instances.

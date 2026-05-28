@@ -1,5 +1,5 @@
-import * as pdfjsLib from 'https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs';
+import * as pdfjsLib from '/vendor/pdfjs/pdf.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.mjs';
 
 // Page navigation
 const page1 = document.getElementById('page1');
@@ -7,6 +7,14 @@ const page2 = document.getElementById('page2');
 const page3 = document.getElementById('page3');
 const goToPage2Btn = document.getElementById('goToPage2Btn');
 const startOverBtn = document.getElementById('startOverBtn');
+const featuresMenuBtn = document.getElementById('featuresMenuBtn');
+const featuresDropdown = document.getElementById('featuresDropdown');
+const pricingMenuBtn = document.getElementById('pricingMenuBtn');
+const pricingDropdown = document.getElementById('pricingDropdown');
+const benefitsMenuBtn = document.getElementById('benefitsMenuBtn');
+const benefitsSection = document.getElementById('benefits');
+const mobileNavToggle = document.getElementById('mobileNavToggle');
+const primaryNav = document.getElementById('primaryNav');
 
 // Upload UI elements
 const input = document.getElementById('pdfInput');
@@ -24,6 +32,11 @@ const pdfPreviewContainer = document.getElementById('pdfPreviewContainer');
 const pdfCanvas = document.getElementById('pdfCanvas');
 const selectionOverlay = document.getElementById('selectionOverlay');
 const canvasWrapper = document.getElementById('canvasWrapper');
+const openExcludeRegionBtn = document.getElementById('openExcludeRegionBtn');
+const doneExcludeRegionBtn = document.getElementById('doneExcludeRegionBtn');
+const excludeRegionStatus = document.getElementById('excludeRegionStatus');
+const excludeRegionHint = document.getElementById('excludeRegionHint');
+const excludedColorsPreview = document.getElementById('excludedColorsPreview');
 const prevPageBtn = document.getElementById('prevPageBtn');
 const nextPageBtn = document.getElementById('nextPageBtn');
 const pageNumSpan = document.getElementById('pageNum');
@@ -52,16 +65,233 @@ let isEyedropMode = false;
 let excludedRegion = null;
 let dragStart = null;
 let dragCurrent = null;
-let ignoreColors = []; // Array of {r,g,b}
+let ignoreColors = []; // Array of {r,g,b,label?}
+let colorPickPageNum = 1;
 
 // New UI Elements
 const eyedropperBtn = document.getElementById('eyedropperBtn');
 const pickedColorsContainer = document.getElementById('pickedColors');
 const noColorsText = document.getElementById('noColorsText');
+const colorPickPreview = document.getElementById('colorPickPreview');
+const closeColorPickBtn = document.getElementById('closeColorPickBtn');
+const colorPickCanvas = document.getElementById('colorPickCanvas');
+const colorPickOverlay = document.getElementById('colorPickOverlay');
+const colorSampleHud = document.getElementById('colorSampleHud');
+const colorSampleSwatch = document.getElementById('colorSampleSwatch');
+const colorSampleRgb = document.getElementById('colorSampleRgb');
+const colorSampleName = document.getElementById('colorSampleName');
+const colorCursorMarker = document.getElementById('colorCursorMarker');
+const pickerLiveValue = document.getElementById('pickerLiveValue');
+const colorPickerExcludedColors = document.getElementById('colorPickerExcludedColors');
+const colorPrevPageBtn = document.getElementById('colorPrevPageBtn');
+const colorNextPageBtn = document.getElementById('colorNextPageBtn');
+const colorPageNumSpan = document.getElementById('colorPageNum');
+const previewModeTitle = document.getElementById('previewModeTitle');
+const previewModeHint = document.getElementById('previewModeHint');
 const previewModal = document.getElementById('previewModal');
 const closeModalBtn = document.getElementById('closeModalBtn');
 const modalTitle = document.getElementById('modalTitle');
 const pdfIframe = document.getElementById('pdfIframe');
+const printCostBtn = document.getElementById('printCostBtn');
+const costModal = document.getElementById('costModal');
+const closeCostModalBtn = document.getElementById('closeCostModalBtn');
+const costSettingsForm = document.getElementById('costSettingsForm');
+const bwPageCostInput = document.getElementById('bwPageCostInput');
+const colorPageCostInput = document.getElementById('colorPageCostInput');
+const savingsNotice = document.getElementById('savingsNotice');
+const savingsAmount = document.getElementById('savingsAmount');
+const printCostBreakdown = document.getElementById('printCostBreakdown');
+const origPrintCostBadge = document.getElementById('origPrintCostBadge');
+const colorPrintCostBadge = document.getElementById('colorPrintCostBadge');
+const bwPrintCostBadge = document.getElementById('bwPrintCostBadge');
+const legacyPrintCostStorageKey = 'splitsmart-print-costs';
+const printCostStorageKey = 'smartsplit-print-costs';
+let latestCostSummary = null;
+
+function readPrintCosts() {
+  return {
+    bw: Number.parseFloat(bwPageCostInput?.value || ''),
+    color: Number.parseFloat(colorPageCostInput?.value || '')
+  };
+}
+
+function hasValidPrintCosts(costs = readPrintCosts()) {
+  return Number.isFinite(costs.bw) && costs.bw >= 0 &&
+    Number.isFinite(costs.color) && costs.color >= 0 &&
+    costs.color >= costs.bw;
+}
+
+function formatMoney(value) {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function savePrintCosts() {
+  const costs = readPrintCosts();
+  if (!Number.isFinite(costs.bw) || !Number.isFinite(costs.color)) return;
+  localStorage.setItem(printCostStorageKey, JSON.stringify(costs));
+}
+
+function loadPrintCosts() {
+  try {
+    const storedRaw = localStorage.getItem(printCostStorageKey) || localStorage.getItem(legacyPrintCostStorageKey);
+    const stored = JSON.parse(storedRaw || 'null');
+    if (!stored) return;
+    if (Number.isFinite(stored.bw)) bwPageCostInput.value = stored.bw;
+    if (Number.isFinite(stored.color)) colorPageCostInput.value = stored.color;
+    if (!localStorage.getItem(printCostStorageKey)) savePrintCosts();
+  } catch {
+    localStorage.removeItem(printCostStorageKey);
+    localStorage.removeItem(legacyPrintCostStorageKey);
+  }
+}
+
+function openCostModal() {
+  if (!costModal) return;
+  costModal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+  setTimeout(() => bwPageCostInput?.focus(), 0);
+}
+
+function closeCostModal() {
+  if (!costModal) return;
+  costModal.style.display = 'none';
+  document.body.classList.remove('modal-open');
+}
+
+function updateSavingsNotice() {
+  if (!latestCostSummary) return;
+
+  const costs = readPrintCosts();
+  if (!hasValidPrintCosts(costs)) {
+    if (savingsNotice) savingsNotice.hidden = true;
+    [origPrintCostBadge, colorPrintCostBadge, bwPrintCostBadge].forEach((badge) => {
+      if (badge) badge.hidden = true;
+    });
+    return;
+  }
+
+  const allColorCost = latestCostSummary.totalPages * costs.color;
+  const colorPrintCost = latestCostSummary.colorPages * costs.color;
+  const bwPrintCost = latestCostSummary.bwPages * costs.bw;
+  const splitCost = colorPrintCost + bwPrintCost;
+  const saved = Math.max(0, allColorCost - splitCost);
+
+  if (origPrintCostBadge) {
+    origPrintCostBadge.textContent = `Color print: ${formatMoney(allColorCost)}`;
+    origPrintCostBadge.hidden = false;
+  }
+  if (colorPrintCostBadge) {
+    colorPrintCostBadge.textContent = `Print cost: ${formatMoney(colorPrintCost)}`;
+    colorPrintCostBadge.hidden = latestCostSummary.colorPages === 0;
+  }
+  if (bwPrintCostBadge) {
+    bwPrintCostBadge.textContent = `Print cost: ${formatMoney(bwPrintCost)}`;
+    bwPrintCostBadge.hidden = latestCostSummary.bwPages === 0;
+  }
+  if (savingsNotice) {
+    savingsAmount.textContent = formatMoney(saved);
+    printCostBreakdown.textContent = `Split print cost: ${formatMoney(splitCost)} vs all-color cost: ${formatMoney(allColorCost)}.`;
+    savingsNotice.hidden = false;
+  }
+}
+
+loadPrintCosts();
+
+function setFeaturesMenuOpen(isOpen) {
+  if (!featuresMenuBtn || !featuresDropdown) return;
+  featuresDropdown.hidden = !isOpen;
+  featuresMenuBtn.setAttribute('aria-expanded', String(isOpen));
+}
+
+function setPricingMenuOpen(isOpen) {
+  if (!pricingMenuBtn || !pricingDropdown) return;
+  pricingDropdown.hidden = !isOpen;
+  pricingMenuBtn.setAttribute('aria-expanded', String(isOpen));
+}
+
+function closeNavMenus() {
+  setFeaturesMenuOpen(false);
+  setPricingMenuOpen(false);
+}
+
+function setMobileNavOpen(isOpen) {
+  if (!mobileNavToggle || !primaryNav) return;
+  primaryNav.classList.toggle('is-open', isOpen);
+  mobileNavToggle.classList.toggle('is-open', isOpen);
+  mobileNavToggle.setAttribute('aria-expanded', String(isOpen));
+  mobileNavToggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+  if (!isOpen) closeNavMenus();
+}
+
+function showPage1() {
+  page1.classList.add('active');
+  page1.style.display = 'block';
+  page2.classList.remove('active');
+  page2.style.display = 'none';
+  if (page3) {
+    page3.classList.remove('active');
+    page3.style.display = 'none';
+  }
+}
+
+function scrollToBenefits() {
+  closeNavMenus();
+  setMobileNavOpen(false);
+  showPage1();
+  requestAnimationFrame(() => {
+    benefitsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+mobileNavToggle?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  setMobileNavOpen(!primaryNav.classList.contains('is-open'));
+});
+
+printCostBtn?.addEventListener('click', openCostModal);
+closeCostModalBtn?.addEventListener('click', closeCostModal);
+costModal?.addEventListener('click', (event) => {
+  if (event.target === costModal) closeCostModal();
+});
+costSettingsForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  savePrintCosts();
+  updateSavingsNotice();
+  closeCostModal();
+});
+[bwPageCostInput, colorPageCostInput].forEach((field) => {
+  field?.addEventListener('input', updateSavingsNotice);
+});
+
+featuresMenuBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const isOpen = featuresDropdown && !featuresDropdown.hidden;
+  closeNavMenus();
+  setFeaturesMenuOpen(!isOpen);
+});
+
+pricingMenuBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const isOpen = pricingDropdown && !pricingDropdown.hidden;
+  closeNavMenus();
+  setPricingMenuOpen(!isOpen);
+});
+
+benefitsMenuBtn?.addEventListener('click', (event) => {
+  event.preventDefault();
+  scrollToBenefits();
+});
+
+document.addEventListener('click', (event) => {
+  const clickedFeatures = featuresMenuBtn && featuresDropdown && (featuresMenuBtn.contains(event.target) || featuresDropdown.contains(event.target));
+  const clickedPricing = pricingMenuBtn && pricingDropdown && (pricingMenuBtn.contains(event.target) || pricingDropdown.contains(event.target));
+  const clickedMobileNav = mobileNavToggle && primaryNav && (mobileNavToggle.contains(event.target) || primaryNav.contains(event.target));
+  if (!clickedFeatures && !clickedPricing) closeNavMenus();
+  if (!clickedMobileNav) setMobileNavOpen(false);
+});
 
 // Navigation logic
 goToPage2Btn.addEventListener('click', () => {
@@ -76,33 +306,396 @@ startOverBtn.addEventListener('click', () => {
 });
 
 // Selection mode logic
-clearRegionBtn.addEventListener('click', () => {
+clearRegionBtn?.addEventListener('click', () => {
   excludedRegion = null;
-  clearRegionBtn.style.display = 'none';
+  updateExcludeRegionState();
   drawOverlay();
 });
 
 function setMode(select) {
   isSelectMode = select;
-  isEyedropMode = !select;
+  isEyedropMode = false;
   if (select) {
     if(modeSelectBtn) modeSelectBtn.classList.add('active');
     eyedropperBtn.classList.remove('active');
     selectionOverlay.style.cursor = 'crosshair';
-  } else {
-    if(modeSelectBtn) modeSelectBtn.classList.remove('active');
-    eyedropperBtn.classList.add('active');
-    // Using a custom eyedropper cursor
-    selectionOverlay.style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2 22 5-5'/%3E%3Cpath d='M9.5 14.5 16 8'/%3E%3Cpath d='m17 2 5 5-.5.5-2 2L18 7l1.5-1.5L17 3l-1.5 1.5L14 3l2-2 .5.5Z'/%3E%3Cpath d='m19 11-4-4'/%3E%3Cpath d='M6.246 14.754a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l8.485-8.485 2.828 2.828-8.485 8.485Z'/%3E%3C/svg%3E") 0 24, auto`;
+    if (previewModeTitle) previewModeTitle.textContent = 'Drag to select';
+    if (previewModeHint) previewModeHint.textContent = 'Logo, header, watermark, or any area you want to exclude.';
   }
 }
 
-modeSelectBtn.addEventListener('click', () => setMode(true));
-eyedropperBtn.addEventListener('click', () => setMode(!isEyedropMode));
+modeSelectBtn?.addEventListener('click', () => setMode(true));
+eyedropperBtn.addEventListener('click', async () => {
+  if (!currentPdf) return;
+  if (colorPickPreview.style.display === 'none') {
+    await openColorPicker();
+  } else {
+    closeColorPicker();
+  }
+});
+closeColorPickBtn.addEventListener('click', closeColorPicker);
+openExcludeRegionBtn.addEventListener('click', openExcludeRegionPicker);
+doneExcludeRegionBtn.addEventListener('click', closeExcludeRegionPicker);
+colorPrevPageBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+colorNextPageBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+prevPageBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+nextPageBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 setMode(true);
+
+async function openColorPicker() {
+  colorPickPreview.style.display = 'block';
+  document.body.classList.add('modal-open');
+  eyedropperBtn.classList.add('active');
+  colorPickPageNum = currentPageNum;
+  renderExcludedColorsPreview();
+  await renderColorPickPage(colorPickPageNum);
+}
+
+function closeColorPicker() {
+  colorPickPreview.style.display = 'none';
+  document.body.classList.remove('modal-open');
+  eyedropperBtn.classList.remove('active');
+  hideColorSampleHud();
+}
+
+async function openExcludeRegionPicker() {
+  if (!currentPdf) return;
+  closeColorPicker();
+  pdfPreviewContainer.style.display = 'block';
+  document.body.classList.add('modal-open');
+  setMode(true);
+  renderExcludedColorsPreview();
+  await renderPage(currentPageNum);
+}
+
+function closeExcludeRegionPicker() {
+  pdfPreviewContainer.style.display = 'none';
+  document.body.classList.remove('modal-open');
+  dragStart = null;
+  dragCurrent = null;
+}
+
+function updateExcludeRegionState() {
+  if (excludedRegion) {
+    openExcludeRegionBtn.textContent = 'Edit Exclude Region';
+    excludeRegionStatus.textContent = 'Region selected';
+    excludeRegionHint.textContent = 'An exclusion region is selected. Open the preview to adjust or clear it.';
+  } else {
+    openExcludeRegionBtn.textContent = 'Select Exclude Region';
+    excludeRegionStatus.textContent = 'No region selected';
+    excludeRegionHint.textContent = currentPdf
+      ? 'Open the preview only if you want to ignore a logo, header, watermark, or selected area.'
+      : 'Upload a PDF to draw an exclusion region.';
+  }
+  renderExcludedColorsPreview();
+}
+
+function renderExcludedColorsPreview() {
+  const previewTargets = [excludedColorsPreview, colorPickerExcludedColors].filter(Boolean);
+  if (previewTargets.length === 0) return;
+
+  const html = ignoreColors.length === 0
+    ? `
+      <span class="excluded-colors-empty">No ignored colors selected.</span>
+    `
+    : `
+    <div class="excluded-colors-label">Ignored colors</div>
+    <div class="excluded-color-list">
+      ${ignoreColors.map((color) => {
+        const hex = rgbToHex(color.r, color.g, color.b);
+        return `
+          <div class="excluded-color-pill" title="${hex} | tolerance ${color.tolerance}">
+            <span class="excluded-color-dot" style="background:${hex}"></span>
+            <span>${hex}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  previewTargets.forEach((target) => {
+    target.innerHTML = html;
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeNavMenus();
+    setMobileNavOpen(false);
+    closeCostModal();
+  }
+  if (event.key === 'Escape' && colorPickPreview.style.display !== 'none') {
+    closeColorPicker();
+  }
+  if (event.key === 'Escape' && pdfPreviewContainer.style.display !== 'none') {
+    closeExcludeRegionPicker();
+  }
+});
 
 function rgbToHex(r, g, b) {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
+function getColorName(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const spread = max - min;
+  const brightness = max / 255;
+
+  if (brightness < 0.12) return 'Black';
+  if (brightness > 0.92 && spread < 18) return 'White';
+  if (spread < 14) return 'Gray';
+
+  const hue = rgbToHue(r, g, b);
+  if (hue < 15 || hue >= 345) return 'Red';
+  if (hue < 45) return 'Orange';
+  if (hue < 70) return 'Yellow';
+  if (hue < 165) return 'Green';
+  if (hue < 195) return 'Cyan';
+  if (hue < 255) return 'Blue';
+  if (hue < 285) return 'Purple';
+  if (hue < 345) return 'Pink';
+  return 'Color';
+}
+
+function rgbToHue(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+
+  if (delta === 0) return 0;
+  let hue;
+  if (max === rn) {
+    hue = ((gn - bn) / delta) % 6;
+  } else if (max === gn) {
+    hue = (bn - rn) / delta + 2;
+  } else {
+    hue = (rn - gn) / delta + 4;
+  }
+  return (hue * 60 + 360) % 360;
+}
+
+function parsePdfColor(value) {
+  if (typeof value === 'string') {
+    const match = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return null;
+    const hex = match[1].length === 3
+      ? match[1].split('').map((char) => char + char).join('')
+      : match[1];
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16)
+    };
+  }
+
+  if (Array.isArray(value) && value.length >= 3 && value.every((item) => typeof item === 'number')) {
+    let [r, g, b] = value;
+    if (r <= 1 && g <= 1 && b <= 1) {
+      r *= 255;
+      g *= 255;
+      b *= 255;
+    }
+    return { r, g, b };
+  }
+
+  return null;
+}
+
+function normalizeColor(color, label = 'Picked') {
+  return {
+    r: Math.min(255, Math.max(0, Math.round(color.r))),
+    g: Math.min(255, Math.max(0, Math.round(color.g))),
+    b: Math.min(255, Math.max(0, Math.round(color.b))),
+    label,
+    tolerance: Math.min(80, Math.max(20, Number(color.tolerance) || 40))
+  };
+}
+
+function colorDistanceSq(a, b) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
+function addIgnoredColor(color, label = 'Picked') {
+  const normalized = normalizeColor(color, label);
+  const existing = ignoreColors.find((item) => colorDistanceSq(item, normalized) < item.tolerance * item.tolerance);
+
+  if (existing) {
+    if (existing.label === 'Picked' && label !== 'Picked') {
+      existing.label = label;
+    }
+    return false;
+  }
+
+  ignoreColors.push(normalized);
+  return true;
+}
+
+function matMul(m, a) {
+  return [
+    a[0] * m[0] + a[1] * m[2],
+    a[0] * m[1] + a[1] * m[3],
+    a[2] * m[0] + a[3] * m[2],
+    a[2] * m[1] + a[3] * m[3],
+    a[4] * m[0] + a[5] * m[2] + m[4],
+    a[4] * m[1] + a[5] * m[3] + m[5]
+  ];
+}
+
+function transformPt(m, x, y) {
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+function bboxFromMinMax(minMax, ctm) {
+  if (!minMax || typeof minMax !== 'object') return null;
+  const values = [minMax[0], minMax[1], minMax[2], minMax[3]];
+  if (values.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+    return null;
+  }
+
+  const [x1, y1, x2, y2] = values;
+  const pts = [[x1, y1], [x2, y1], [x1, y2], [x2, y2]].map(([x, y]) => transformPt(ctm, x, y));
+  return {
+    x1: Math.min(...pts.map((p) => p[0])),
+    x2: Math.max(...pts.map((p) => p[0])),
+    y1: Math.min(...pts.map((p) => p[1])),
+    y2: Math.max(...pts.map((p) => p[1]))
+  };
+}
+
+function pointInBbox(point, bbox, tolerance = 3) {
+  return point.x >= bbox.x1 - tolerance && point.x <= bbox.x2 + tolerance &&
+    point.y >= bbox.y1 - tolerance && point.y <= bbox.y2 + tolerance;
+}
+
+async function getVectorColorsAtPoint(canvasX, canvasY) {
+  if (!currentPdf) return [];
+
+  const page = await currentPdf.getPage(currentPageNum);
+  const operatorList = await page.getOperatorList();
+  const ops = pdfjsLib.OPS;
+  const point = { x: canvasX, y: pdfCanvas.height - canvasY };
+  const hits = [];
+  const graphicsStateStack = [];
+
+  let ctm = [1, 0, 0, 1, 0, 0];
+  let fillColor = null;
+  let strokeColor = null;
+
+  for (let i = 0; i < operatorList.fnArray.length; i += 1) {
+    const fn = operatorList.fnArray[i];
+    const args = operatorList.argsArray[i] || [];
+
+    if (fn === ops.transform) {
+      ctm = matMul(ctm, args);
+    } else if (fn === ops.save) {
+      graphicsStateStack.push({ ctm: [...ctm], fillColor, strokeColor });
+    } else if (fn === ops.restore && graphicsStateStack.length) {
+      const state = graphicsStateStack.pop();
+      ctm = state.ctm;
+      fillColor = state.fillColor;
+      strokeColor = state.strokeColor;
+    } else if (fn === ops.setFillRGBColor || fn === ops.setFillColorN) {
+      fillColor = parsePdfColor(args[0] ?? args);
+    } else if (fn === ops.setStrokeRGBColor || fn === ops.setStrokeColorN) {
+      strokeColor = parsePdfColor(args[0] ?? args);
+    } else if (fn === ops.constructPath) {
+      const bbox = bboxFromMinMax(args[2], ctm);
+      if (bbox && pointInBbox(point, bbox)) {
+        if (fillColor) hits.push({ ...fillColor, label: 'Fill' });
+        if (strokeColor) hits.push({ ...strokeColor, label: 'Border' });
+      }
+    }
+  }
+
+  page.cleanup();
+  return hits;
+}
+
+async function addIgnoredColorFromPoint(clientX, clientY) {
+  const sample = sampleColorAtPoint(clientX, clientY);
+  if (!sample) return;
+
+  if (sample.a > 0) {
+    addIgnoredColor({ r: sample.r, g: sample.g, b: sample.b }, sample.name);
+    renderPickedColors();
+    renderExcludedColorsPreview();
+  }
+}
+
+function sampleColorAtPoint(clientX, clientY) {
+  const rect = colorPickOverlay.getBoundingClientRect();
+  const scaleX = colorPickCanvas.width / rect.width;
+  const scaleY = colorPickCanvas.height / rect.height;
+  const x = Math.floor((clientX - rect.left) * scaleX);
+  const y = Math.floor((clientY - rect.top) * scaleY);
+
+  if (x < 0 || y < 0 || x >= colorPickCanvas.width || y >= colorPickCanvas.height) {
+    return null;
+  }
+
+  const pixel = colorPickCanvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  const sample = {
+    r: pixel[0],
+    g: pixel[1],
+    b: pixel[2],
+    a: pixel[3]
+  };
+  sample.hex = rgbToHex(sample.r, sample.g, sample.b);
+  sample.name = getColorName(sample.r, sample.g, sample.b);
+  sample.canvasX = x;
+  sample.canvasY = y;
+  sample.uiX = clientX - rect.left;
+  sample.uiY = clientY - rect.top;
+  sample.rect = rect;
+  return sample;
+}
+
+function updateColorSampleHud(clientX, clientY) {
+  const sample = sampleColorAtPoint(clientX, clientY);
+  if (!sample || sample.a === 0) {
+    hideColorSampleHud();
+    return;
+  }
+
+  colorSampleSwatch.style.backgroundColor = sample.hex;
+  colorSampleRgb.textContent = `rgb(${sample.r}, ${sample.g}, ${sample.b})`;
+  colorSampleName.textContent = sample.name;
+  pickerLiveValue.textContent = `${sample.name} ${sample.hex}`;
+
+  colorSampleHud.hidden = false;
+  colorCursorMarker.hidden = false;
+
+  const hudWidth = Math.max(120, Math.min(250, sample.rect.width - 24));
+  const maxHudX = Math.max(12, sample.rect.width - hudWidth - 12);
+  colorSampleHud.style.width = `${hudWidth}px`;
+  const hudX = Math.min(Math.max(sample.uiX - hudWidth / 2, 12), maxHudX);
+  const hudY = Math.max(sample.uiY - 120, 12);
+
+  colorSampleHud.style.left = `${hudX}px`;
+  colorSampleHud.style.top = `${hudY}px`;
+  colorCursorMarker.style.left = `${sample.uiX - 18}px`;
+  colorCursorMarker.style.top = `${sample.uiY - 60}px`;
+}
+
+function hideColorSampleHud() {
+  colorSampleHud.hidden = true;
+  colorCursorMarker.hidden = true;
+}
+
+function getOverlayPoint(e) {
+  const r = selectionOverlay.getBoundingClientRect();
+  return {
+    x: Math.min(Math.max(e.clientX - r.left, 0), r.width),
+    y: Math.min(Math.max(e.clientY - r.top, 0), r.height),
+    rect: r
+  };
 }
 
 function renderPickedColors() {
@@ -116,23 +709,36 @@ function renderPickedColors() {
   pickedColorsContainer.innerHTML = '';
   
   const list = document.createElement('div');
-  list.className = 'picked-colors-list';
+  list.className = 'picked-color-chips';
   
   ignoreColors.forEach((color, idx) => {
     const item = document.createElement('div');
-    item.className = 'color-list-item';
+    item.className = 'picked-color-chip';
     
     const hex = rgbToHex(color.r, color.g, color.b);
     
     item.innerHTML = `
-      <div class="swatch" style="background-color: ${hex}"></div>
-      <span class="color-hex">${hex}</span>
-      <button type="button" class="remove-color-btn" title="Remove">&times;</button>
+      <button type="button" class="remove-color-btn chip-remove" title="Remove">&times;</button>
+      <div class="round-swatch" style="background-color: ${hex}" aria-hidden="true"></div>
+      <div class="chip-meta">
+        <strong>${hex}</strong>
+        <span>RGB ${color.r}, ${color.g}, ${color.b}</span>
+      </div>
+      <div class="chip-tolerance">
+        <label>Tolerance <strong>${color.tolerance}</strong></label>
+        <input class="chip-tolerance-slider" type="range" min="20" max="80" step="10" value="${color.tolerance}">
+      </div>
     `;
     
     item.querySelector('.remove-color-btn').addEventListener('click', () => {
       ignoreColors.splice(idx, 1);
       renderPickedColors();
+      renderExcludedColorsPreview();
+    });
+    item.querySelector('.chip-tolerance-slider').addEventListener('input', (event) => {
+      color.tolerance = Number(event.target.value);
+      item.querySelector('.chip-tolerance strong').textContent = color.tolerance;
+      renderExcludedColorsPreview();
     });
     
     list.appendChild(item);
@@ -142,45 +748,38 @@ function renderPickedColors() {
 }
 
 // Canvas overlay logic
-selectionOverlay.addEventListener('mousedown', (e) => {
-  if (isEyedropMode) {
-    // Pick color
-    const r = selectionOverlay.getBoundingClientRect();
-    const scaleX = pdfCanvas.width / r.width;
-    const scaleY = pdfCanvas.height / r.height;
-    const x = (e.clientX - r.left) * scaleX;
-    const y = (e.clientY - r.top) * scaleY;
-    
-    const ctx = pdfCanvas.getContext('2d');
-    const pixel = ctx.getImageData(x, y, 1, 1).data;
-    
-    if (pixel[3] > 0) { // Not fully transparent
-      ignoreColors.push({ r: pixel[0], g: pixel[1], b: pixel[2] });
-      renderPickedColors();
-    }
-    // Turn off eyedropper after picking one color to resume region selection if they want
-    setMode(true);
-    return;
-  }
-
+selectionOverlay.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  const r = selectionOverlay.getBoundingClientRect();
-  dragStart = { x: e.clientX - r.left, y: e.clientY - r.top };
+  selectionOverlay.setPointerCapture(e.pointerId);
+  const point = getOverlayPoint(e);
+  dragStart = { x: point.x, y: point.y };
   dragCurrent = { ...dragStart };
 });
 
-selectionOverlay.addEventListener('mousemove', (e) => {
+colorPickOverlay.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  addIgnoredColorFromPoint(e.clientX, e.clientY);
+});
+
+colorPickOverlay.addEventListener('pointermove', (e) => {
+  updateColorSampleHud(e.clientX, e.clientY);
+});
+
+colorPickOverlay.addEventListener('pointerleave', hideColorSampleHud);
+
+selectionOverlay.addEventListener('pointermove', (e) => {
   if (!dragStart || isEyedropMode) return;
   e.preventDefault();
-  const r = selectionOverlay.getBoundingClientRect();
-  dragCurrent = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const point = getOverlayPoint(e);
+  dragCurrent = { x: point.x, y: point.y };
   drawOverlay();
 });
 
-selectionOverlay.addEventListener('mouseup', (e) => {
+selectionOverlay.addEventListener('pointerup', (e) => {
   if (!dragStart || isEyedropMode) return;
-  const r = selectionOverlay.getBoundingClientRect();
-  const end = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const point = getOverlayPoint(e);
+  const r = point.rect;
+  const end = { x: point.x, y: point.y };
   const w = Math.abs(end.x - dragStart.x);
   const h = Math.abs(end.y - dragStart.y);
   if (w > 5 && h > 5) {
@@ -190,10 +789,22 @@ selectionOverlay.addEventListener('mouseup', (e) => {
       width: w / r.width,
       height: h / r.height
     };
-    clearRegionBtn.style.display = 'inline-block';
+    updateExcludeRegionState();
   }
   dragStart = null;
   dragCurrent = null;
+  if (selectionOverlay.hasPointerCapture(e.pointerId)) {
+    selectionOverlay.releasePointerCapture(e.pointerId);
+  }
+  drawOverlay();
+});
+
+selectionOverlay.addEventListener('pointercancel', (e) => {
+  dragStart = null;
+  dragCurrent = null;
+  if (selectionOverlay.hasPointerCapture(e.pointerId)) {
+    selectionOverlay.releasePointerCapture(e.pointerId);
+  }
   drawOverlay();
 });
 
@@ -259,12 +870,12 @@ input.addEventListener('change', async () => {
         currentPageNum = 1;
         pageCountSpan.textContent = currentPdf.numPages;
         origPageCountBadge.textContent = `${currentPdf.numPages} pages`;
-        await renderPage(currentPageNum);
         
-        noPdfMessage.style.display = 'none';
-        pdfPreviewContainer.style.display = 'flex';
+        noPdfMessage.style.display = 'block';
+        pdfPreviewContainer.style.display = 'none';
         eyedropperBtn.style.display = 'inline-flex';
-        modeSelectBtn.style.display = 'inline-block';
+        openExcludeRegionBtn.style.display = 'inline-flex';
+        updateExcludeRegionState();
       };
       fileReader.readAsArrayBuffer(file);
     } catch (e) {
@@ -288,18 +899,32 @@ function resetFileInput() {
   noPdfMessage.style.display = 'block';
   pdfPreviewContainer.style.display = 'none';
   eyedropperBtn.style.display = 'none';
-  modeSelectBtn.style.display = 'none';
+  openExcludeRegionBtn.style.display = 'none';
+  closeColorPicker();
+  closeExcludeRegionPicker();
   currentPdf = null;
   excludedRegion = null;
   ignoreColors = [];
   renderPickedColors();
-  clearRegionBtn.style.display = 'none';
+  updateExcludeRegionState();
 }
 
 async function renderPage(num) {
   if (!currentPdf) return;
   const page = await currentPdf.getPage(num);
-  const viewport = page.getViewport({ scale: 1.0 });
+  const baseViewport = page.getViewport({ scale: 1.0 });
+  let viewport = baseViewport;
+
+  if (pdfPreviewContainer.style.display !== 'none') {
+    const wrapper = pdfCanvas.closest('.canvas-wrapper');
+    const isCompact = window.matchMedia('(max-width: 768px)').matches;
+    const horizontalChrome = isCompact ? 28 : 156;
+    const verticalChrome = isCompact ? 90 : 120;
+    const availableWidth = Math.max(260, (wrapper?.clientWidth || baseViewport.width) - horizontalChrome);
+    const availableHeight = Math.max(260, (wrapper?.clientHeight || baseViewport.height) - verticalChrome);
+    const scale = Math.max(0.2, Math.min(1.35, availableWidth / baseViewport.width, availableHeight / baseViewport.height));
+    viewport = page.getViewport({ scale });
+  }
 
   pdfCanvas.width = viewport.width;
   pdfCanvas.height = viewport.height;
@@ -313,6 +938,31 @@ async function renderPage(num) {
   drawOverlay();
 }
 
+async function renderColorPickPage(num) {
+  if (!currentPdf) return;
+  const page = await currentPdf.getPage(num);
+  const baseViewport = page.getViewport({ scale: 1.0 });
+  const wrapper = colorPickCanvas.closest('.color-canvas-wrapper');
+  const isCompact = window.matchMedia('(max-width: 768px)').matches;
+  const horizontalChrome = isCompact ? 28 : 156;
+  const verticalChrome = isCompact ? 90 : 42;
+  const availableWidth = Math.max(260, (wrapper?.clientWidth || baseViewport.width) - horizontalChrome);
+  const availableHeight = Math.max(260, (wrapper?.clientHeight || baseViewport.height) - verticalChrome);
+  const scale = Math.max(0.2, Math.min(1.35, availableWidth / baseViewport.width, availableHeight / baseViewport.height));
+  const viewport = page.getViewport({ scale });
+
+  colorPickCanvas.width = viewport.width;
+  colorPickCanvas.height = viewport.height;
+  colorPickOverlay.width = viewport.width;
+  colorPickOverlay.height = viewport.height;
+
+  await page.render({ canvasContext: colorPickCanvas.getContext('2d'), viewport }).promise;
+  colorPageNumSpan.textContent = num;
+  colorPrevPageBtn.disabled = num <= 1;
+  colorNextPageBtn.disabled = num >= currentPdf.numPages;
+  hideColorSampleHud();
+}
+
 prevPageBtn.addEventListener('click', async () => {
   if (currentPageNum <= 1) return;
   currentPageNum--;
@@ -323,6 +973,18 @@ nextPageBtn.addEventListener('click', async () => {
   if (!currentPdf || currentPageNum >= currentPdf.numPages) return;
   currentPageNum++;
   await renderPage(currentPageNum);
+});
+
+colorPrevPageBtn.addEventListener('click', async () => {
+  if (colorPickPageNum <= 1) return;
+  colorPickPageNum--;
+  await renderColorPickPage(colorPickPageNum);
+});
+
+colorNextPageBtn.addEventListener('click', async () => {
+  if (!currentPdf || colorPickPageNum >= currentPdf.numPages) return;
+  colorPickPageNum++;
+  await renderColorPickPage(colorPickPageNum);
 });
 
 // Processing logic
@@ -399,9 +1061,7 @@ async function showResults(data) {
   // bwPages.textContent = formatPages(data.blackWhitePages);
   
   if (bwCountVal > 0) {
-    const blob = base64ToBlob(data.files.blackWhite);
-    const objectUrl = URL.createObjectURL(blob);
-    bwLink.href = objectUrl;
+    bwLink.href = getPdfDownloadUrl(data.files.blackWhite);
     bwLink.download = `${data.fileName}-bw.pdf`;
     bwLink.style.display = 'flex';
     
@@ -420,9 +1080,7 @@ async function showResults(data) {
   // colorPages.textContent = formatPages(data.colorPages);
   
   if (colorCountVal > 0) {
-    const blob = base64ToBlob(data.files.color);
-    const objectUrl = URL.createObjectURL(blob);
-    colorLink.href = objectUrl;
+    colorLink.href = getPdfDownloadUrl(data.files.color);
     colorLink.download = `${data.fileName}-color.pdf`;
     colorLink.style.display = 'flex';
     
@@ -440,6 +1098,13 @@ async function showResults(data) {
   if (summaryText) {
     summaryText.textContent = `${colorCountVal} pages in color • ${bwCountVal} pages in black & white`;
   }
+
+  latestCostSummary = {
+    colorPages: colorCountVal,
+    bwPages: bwCountVal,
+    totalPages: colorCountVal + bwCountVal
+  };
+  updateSavingsNotice();
 
   document.getElementById('startOverBtn').style.display = 'block';
   results.hidden = false;
@@ -510,6 +1175,14 @@ async function renderThumbnails(pageNumbers, containerId, maxThumbs = 4, isPinkM
     
     more.remove();
   }, { once: true });
+}
+
+function getPdfDownloadUrl(fileRef) {
+  if (!fileRef) return '#';
+  if (!fileRef.startsWith('data:')) return fileRef;
+
+  const blob = base64ToBlob(fileRef);
+  return URL.createObjectURL(blob);
 }
 
 function base64ToBlob(dataUrl) {
