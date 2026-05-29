@@ -19,6 +19,10 @@ npm-debug.log*
 *.png
 tutorial videos/
 
+# Local agent/audit notes
+AUDIT_LOG.md
+Agents.md
+
 # OS files
 .DS_Store
 Thumbs.db
