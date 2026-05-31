@@ -3,14 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SplitSmart PDF | Color Separator</title>
+    <title>SmartSplit PDF | Color Separator</title>
     <link rel="stylesheet" href="/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
-    
     <!-- PAGE 1: Home -->
     <div id="page1" class="page-view active">
       <!-- Header -->
@@ -20,14 +19,46 @@
             <rect width="24" height="24" rx="6" fill="#4f46e5"/>
             <path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span class="logo-text">SplitSmart <strong>PDF</strong></span>
+          <span class="logo-text">SmartSplit <strong>PDF</strong></span>
         </div>
-        <nav class="nav-links">
-          <a href="#">How it works</a>
-          <a href="#">Features</a>
-          <a href="#">Benefits</a>
-          <a href="#">Pricing</a>
-          <a href="#">FAQ</a>
+        <button type="button" id="mobileNavToggle" class="mobile-nav-toggle" aria-expanded="false" aria-controls="primaryNav" aria-label="Open navigation">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <nav id="primaryNav" class="nav-links">
+          <div class="nav-dropdown">
+            <button type="button" id="featuresMenuBtn" class="nav-link-btn" aria-expanded="false" aria-controls="featuresDropdown">
+              Features
+            </button>
+            <div id="featuresDropdown" class="nav-dropdown-panel" hidden>
+              <div class="nav-dropdown-item">
+                <strong>Ignore a Color</strong>
+                <p>Choose a recurring color, like a logo or header accent, or the page border colour so pages with only that color stay in black and white.</p>
+              </div>
+              <div class="nav-dropdown-item">
+                <strong>Exclude Region</strong>
+                <p>Draw around a logo, header, footer, or watermark so that area is ignored during color detection.</p>
+              </div>
+            </div>
+          </div>
+          <div class="nav-dropdown">
+            <button type="button" id="pricingMenuBtn" class="nav-link-btn" aria-expanded="false" aria-controls="pricingDropdown">
+              Pricing
+            </button>
+            <div id="pricingDropdown" class="nav-dropdown-panel" hidden>
+              <div class="nav-dropdown-item">
+                <strong>Ignore a Color</strong>
+                <p>Freee for now!!!!! , Use it as you please.</p>
+              </div>
+            </div>
+          </div>
+          <button type="button" id="benefitsMenuBtn" class="nav-link-btn">
+            Benefits
+          </button>
+          <button type="button" id="printCostBtn" class="nav-link-btn cost-settings-button" aria-label="Printing costs" title="Printing costs" aria-haspopup="dialog" aria-controls="costModal">
+            <span class="cost-settings-icon">₹</span>
+          </button>
         </nav>
       </header>
 
@@ -49,11 +80,11 @@
             </div>
             <div class="feature-item">
               <div class="f-icon purple-bg">💧</div>
-              <div class="f-text"><strong>Ignore a Color</strong><br>Treat pages with only<br>that color as B&W</div>
+              <div class="f-text"><strong>Ignore a Color</strong></div>
             </div>
             <div class="feature-item">
               <div class="f-icon outline-bg">⛶</div>
-              <div class="f-text"><strong>Exclude Regions</strong><br>Remove logos or areas<br>from color detection</div>
+              <div class="f-text"><strong>Exclude Region</strong></div>
             </div>
           </div>
 
@@ -95,8 +126,8 @@
       </section>
 
       <!-- Why use section -->
-      <section class="why-use">
-        <h2>Why use <strong>SplitSmart PDF?</strong></h2>
+      <section id="benefits" class="why-use">
+        <h2>Why use <strong>SmartSplit PDF?</strong></h2>
         <div class="features-grid-cards">
           <div class="fc">
             <div class="fc-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
@@ -123,12 +154,12 @@
             <div class="fc-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
             <div class="fc-text">
               <h4>Privacy First</h4>
-              <p>Your files are processed in your browser. Nothing is uploaded.</p>
+              <p>Your PDF is sent to this server for temporary processing, then the upload is deleted.</p>
             </div>
           </div>
         </div>
         <div class="security-note">
-          🔒 100% secure • Files never leave your browser
+          🔒 Temporary processing • Uploads are deleted after processing
         </div>
       </section>
     </div>
@@ -141,7 +172,7 @@
             <rect width="24" height="24" rx="6" fill="#4f46e5"/>
             <path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span class="logo-text">SplitSmart <strong>PDF</strong></span>
+          <span class="logo-text">SmartSplit <strong>PDF</strong></span>
         </div>
       </header>
 
@@ -158,7 +189,7 @@
 
         <div class="step-card">
           <div class="sc-header"><div class="circle-num">1</div> <h3>Upload your PDF</h3></div>
-          <p class="sc-desc">Your file stays in your browser. Nothing is uploaded.</p>
+          <p class="sc-desc">Your PDF is uploaded to this server for temporary processing and deleted after analysis.</p>
           
           <form id="uploadForm">
             <input id="pdfInput" name="pdf" type="file" accept="application/pdf,.pdf" required style="display:none;">
@@ -187,13 +218,47 @@
           <div class="config-section">
             <div class="config-header">
               <h4>Ignore a Color <span class="tag">Optional</span></h4>
-              <p>Pick colors from the PDF that should not trigger the 'Color' separation (e.g., logos).</p>
+              <p>Pick a recurring color, such as a school logo, stamp, or header accent, so pages containing only that color stay in the black and white output.</p>
             </div>
             <div class="color-picker-ui">
               <button type="button" id="eyedropperBtn" class="btn-secondary sm" style="margin-bottom:12px; display:none;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2L19.5 7L7 19.5L2 22L4.5 17L14.5 2Z"/><path d="M12 4.5L17 9.5"/></svg>
                 Pick Color from PDF
               </button>
+              <div id="colorPickPreview" class="color-pick-preview color-picker-modal" style="display:none;">
+                <div class="color-pick-toolbar">
+                  <div class="picker-title">
+                    <strong>Color picker</strong>
+                    <span id="pickerLiveValue">No color selected</span>
+                  </div>
+                  <div id="colorPickerExcludedColors" class="excluded-colors-preview picker-excluded-colors"></div>
+                  <button type="button" id="closeColorPickBtn" class="btn-primary sm">Done</button>
+                </div>
+                <div class="canvas-wrapper color-canvas-wrapper">
+                  <div class="canvas-container">
+                    <canvas id="colorPickCanvas"></canvas>
+                    <canvas id="colorPickOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:auto;cursor:crosshair;"></canvas>
+                    <div id="colorSampleHud" class="color-sample-hud" hidden>
+                      <div id="colorSampleSwatch" class="sample-swatch"></div>
+                      <div class="sample-text">
+                        <strong id="colorSampleRgb">rgb(0, 0, 0)</strong>
+                        <span id="colorSampleName">Black</span>
+                      </div>
+                    </div>
+                    <div id="colorCursorMarker" class="color-cursor-marker" hidden aria-hidden="true">
+                      <svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M27.6 5.3L36.7 14.4L16.5 34.6L6 37L8.4 26.5L28.6 6.3C28.3 5.9 27.9 5.6 27.6 5.3Z" fill="white"/>
+                        <path d="M25.3 8.6L33.4 16.7M16.5 34.6L6 37L8.4 26.5L28.6 6.3C30.1 4.8 32.5 4.8 34 6.3L35.7 8C37.2 9.5 37.2 11.9 35.7 13.4L16.5 34.6Z" stroke="#111827" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="preview-controls">
+                    <button type="button" id="colorPrevPageBtn">â†</button>
+                    <span class="page-info">Page <span id="colorPageNum">1</span></span>
+                    <button type="button" id="colorNextPageBtn">â†’</button>
+                  </div>
+                </div>
+              </div>
               <div id="pickedColors" class="color-swatches">
                 <span id="noColorsText" style="font-size:0.8rem; color:#9ca3af;">No colors ignored yet.</span>
               </div>
@@ -203,11 +268,21 @@
           <div class="config-section divider-top">
             <div class="config-header">
               <h4>Exclude Region <span class="tag">Optional</span></h4>
-              <p>Select an area that will be ignored when detecting colors.</p>
+              <p>Draw a box around a repeated area, such as a logo, header, footer, or watermark, and SmartSplit will ignore colors inside that area on every page.</p>
             </div>
+            <button type="button" id="openExcludeRegionBtn" class="btn-secondary sm" style="display:none; margin-bottom:12px;">
+              Select Exclude Region
+            </button>
             
             <div class="exclude-region-container">
-               <div id="pdfPreviewContainer" style="display:none;">
+               <div id="pdfPreviewContainer" class="exclude-region-modal" style="display:none;">
+                 <div class="exclude-modal-toolbar">
+                   <div class="picker-title">
+                     <strong>Exclude region</strong>
+                     <span id="excludeRegionStatus">No region selected</span>
+                   </div>
+                   <button type="button" id="doneExcludeRegionBtn" class="btn-primary sm">Done</button>
+                 </div>
                  <div class="canvas-wrapper">
                    <div class="canvas-container" id="canvasWrapper">
                      <canvas id="pdfCanvas"></canvas>
@@ -221,12 +296,10 @@
                  </div>
                  <div class="er-side">
                    <div class="er-instructions">
-                     <strong>Drag to select</strong><br>
-                     Logo, header, watermark, or any area you want to exclude.
+                     <strong id="previewModeTitle">Drag to select</strong><br>
+                     <span id="previewModeHint">Logo, header, watermark, or any area you want to exclude.</span>
                    </div>
-                   <div class="mode-bar">
-                     <button type="button" id="modeSelectBtn" class="mode-btn active" style="display:none;">✂️ Select Exclude Region</button>
-                     <button type="button" id="clearRegionBtn" class="mode-btn danger" style="display:none">✕ Clear Region</button>
+                   <div id="excludedColorsPreview" class="excluded-colors-preview">
                    </div>
                  </div>
                </div>
@@ -245,7 +318,7 @@
                        Logo, header, watermark, or any area you want to exclude.
                     </div>
                  </div>
-                 <p class="mode-hint">Upload a PDF to draw an exclusion region.</p>
+                 <p id="excludeRegionHint" class="mode-hint">Upload a PDF to draw an exclusion region.</p>
                </div>
             </div>
             <p class="er-footer-note">ⓘ You can adjust or clear the selection anytime.</p>
@@ -264,7 +337,7 @@
             <rect width="24" height="24" rx="6" fill="#4f46e5"/>
             <path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span class="logo-text">SplitSmart <strong>PDF</strong></span>
+          <span class="logo-text">SmartSplit <strong>PDF</strong></span>
         </div>
       </header>
 
@@ -294,7 +367,10 @@
             <div class="result-box">
               <div class="result-box-header">
                 <h3>Original PDF Preview</h3>
-                <span class="badge-gray" id="origPageCountBadge">100 pages</span>
+                <span class="badge-stack">
+                  <span class="badge-gray" id="origPageCountBadge">100 pages</span>
+                  <span class="cost-badge" id="origPrintCostBadge" hidden>Color print: 0.00</span>
+                </span>
               </div>
               <div class="thumbnails-grid" id="origThumbnails">
                 <div class="thumb-item"><div class="thumb color-thumb-1"></div><span class="thumb-page">1</span></div>
@@ -313,7 +389,10 @@
               <div class="processed-box color-box">
                 <div class="processed-header">
                   <h4>Color Pages</h4>
-                  <span class="badge-pink" id="colorCount">24 pages</span>
+                  <span class="badge-stack">
+                    <span class="badge-pink" id="colorCount">24 pages</span>
+                    <span class="cost-badge pink" id="colorPrintCostBadge" hidden>Print cost: 0.00</span>
+                  </span>
                 </div>
                 <div class="thumbnails-grid" id="colorPages">
                   <div class="thumb-item"><div class="thumb color-thumb-1"></div></div>
@@ -327,7 +406,10 @@
               <div class="processed-box bw-box">
                 <div class="processed-header">
                   <h4>Black & White Pages</h4>
-                  <span class="badge-gray" id="bwCount">76 pages</span>
+                  <span class="badge-stack">
+                    <span class="badge-gray" id="bwCount">76 pages</span>
+                    <span class="cost-badge" id="bwPrintCostBadge" hidden>Print cost: 0.00</span>
+                  </span>
                 </div>
                 <div class="thumbnails-grid" id="bwPages">
                   <div class="thumb-item"><div class="thumb bw-thumb-1"></div></div>
@@ -343,7 +425,6 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                   <span id="summaryText">24 pages in color • 76 pages in black & white</span>
                 </div>
-                <a href="#" class="view-details-link">View details</a>
               </div>
             </div>
 
@@ -369,9 +450,9 @@
                   </div>
                 </a>
               </div>
-              <div class="download-footer-note">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                <span>You can download them separately and print to save costs.</span>
+              <div id="savingsNotice" class="savings-notice" hidden>
+                <div>Congratulations, you saved <strong id="savingsAmount">0.00</strong> on printing.</div>
+                <span id="printCostBreakdown"></span>
               </div>
               <button id="startOverBtn" class="btn-secondary full-width" style="margin-top:20px;">Process Another File</button>
             </div>
@@ -390,6 +471,28 @@
         <div class="modal-body">
           <iframe id="pdfIframe" src="" style="width:100%; height:600px; border:none;"></iframe>
         </div>
+      </div>
+    </div>
+
+    <!-- Printing Cost Modal -->
+    <div id="costModal" class="modal-overlay cost-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="costModalTitle">
+      <div class="modal-content cost-modal-content">
+        <div class="modal-header">
+          <h3 id="costModalTitle">Printing costs</h3>
+          <button type="button" id="closeCostModalBtn" class="fc-close">×</button>
+        </div>
+        <form id="costSettingsForm" class="cost-form">
+          <label class="cost-field">
+            <span>Black & white page cost</span>
+            <input id="bwPageCostInput" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+          </label>
+          <label class="cost-field">
+            <span>Color page cost</span>
+            <input id="colorPageCostInput" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+          </label>
+          <p class="cost-helper">Savings compare printing every page in color against printing color and black-and-white pages separately.</p>
+          <button type="submit" class="btn-primary full-width">Save costs</button>
+        </form>
       </div>
     </div>
 
