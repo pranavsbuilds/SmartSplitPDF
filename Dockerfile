@@ -1,5 +1,10 @@
 FROM node:20-slim
 
+LABEL org.opencontainers.image.title="SmartSplit PDF" \
+      org.opencontainers.image.description="Splits PDFs into color and black-and-white streams" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 # Install system dependencies required for canvas/font rendering
@@ -28,5 +33,8 @@ EXPOSE 3000
 # Set environment defaults
 ENV NODE_ENV=production
 ENV PORT=3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["npm", "start"]

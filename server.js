@@ -16,24 +16,30 @@ const port = process.env.PORT || 3000;
 const maxUploadMb = clampNumber(Number(process.env.MAX_UPLOAD_MB), 1, 50, 25);
 const maxPdfPages = clampNumber(Number(process.env.MAX_PDF_PAGES), 1, 1000, 150);
 const maxConcurrentJobs = clampNumber(Number(process.env.MAX_CONCURRENT_JOBS), 1, 8, 2);
+const maxQueueJobs = clampNumber(Number(process.env.MAX_QUEUE_JOBS), 1, 100, 10);
+const largeFileThresholdMb = clampNumber(Number(process.env.LARGE_FILE_THRESHOLD_MB), 1, 50, 10);
+const starvationTimeoutMs = clampNumber(Number(process.env.STARVATION_TIMEOUT_MS), 10_000, 3_600_000, 120_000);
 const resultTtlMs = clampNumber(Number(process.env.RESULT_TTL_MS), 60_000, 3_600_000, 15 * 60_000);
 const rateLimitWindowMs = clampNumber(Number(process.env.RATE_LIMIT_WINDOW_MS), 10_000, 3_600_000, 15 * 60_000);
 const rateLimitMax = clampNumber(Number(process.env.RATE_LIMIT_MAX), 1, 200, 20);
 const forceHttps = process.env.FORCE_HTTPS === 'true';
 let activeJobs = 0;
+const jobQueue = [];
+const jobs = new Map();
 const uploadHitsByIp = new Map();
 
 const uploadDir = path.join(__dirname, 'uploads');
 const resultDir = path.join(uploadDir, 'results');
 await fs.mkdir(uploadDir, { recursive: true });
 await fs.mkdir(resultDir, { recursive: true });
+await cleanupOrphanUploads();
 await cleanupExpiredResults();
 
 const upload = multer({
   dest: uploadDir,
   limits: { fileSize: maxUploadMb * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+    if (file.mimetype === 'application/pdf') {
       cb(null, true);
       return;
     }
@@ -71,16 +77,40 @@ app.get('/api/download/:jobId/:kind', async (req, res) => {
   }
 });
 
-app.post('/api/process', rateLimitUploads, (req, res, next) => {
-  if (activeJobs >= maxConcurrentJobs) {
-    res.status(429).json({ error: 'Server is busy. Please try again in a moment.' });
+app.get('/api/jobs/:jobId', (req, res) => {
+  const { jobId } = req.params;
+
+  if (!isValidJobId(jobId)) {
+    res.status(404).json({ error: 'Job not found.' });
     return;
   }
 
-  activeJobs += 1;
+  const job = jobs.get(jobId);
+  if (!job) {
+    res.json({
+      jobId,
+      status: 'expired',
+      position: null,
+      result: null
+    });
+    return;
+  }
+
+  res.json(serializeJob(job));
+});
+
+app.post('/api/process', rateLimitUploads, (req, res, next) => {
+  const approximateRequestBytes = Number.parseInt(req.headers['content-length'] || '0', 10);
+  req.approximateRequestBytes = Number.isFinite(approximateRequestBytes) ? approximateRequestBytes : 0;
+  drainQueue();
+
+  if (jobQueue.length >= maxQueueJobs) {
+    res.status(429).json({ error: 'The server queue is full. Please try again in a few minutes.' });
+    return;
+  }
+
   upload.single('pdf')(req, res, (error) => {
     if (error) {
-      activeJobs -= 1;
       next(error);
       return;
     }
@@ -88,76 +118,43 @@ app.post('/api/process', rateLimitUploads, (req, res, next) => {
   });
 }, async (req, res) => {
   if (!req.file) {
-    activeJobs -= 1;
     res.status(400).json({ error: 'Upload a PDF file first.' });
     return;
   }
 
   try {
-    const inputBytes = await fs.readFile(req.file.path);
-    
-    let excludedRegion = null;
-    if (req.body.excludeRegion) {
-      try {
-        const p = JSON.parse(req.body.excludeRegion);
-        if (typeof p.x === 'number' && typeof p.y === 'number' &&
-            typeof p.width === 'number' && typeof p.height === 'number') {
-          excludedRegion = p;
-        }
-      } catch { /* ignore malformed */ }
+    drainQueue();
+    if (jobQueue.length >= maxQueueJobs) {
+      await fs.unlink(req.file.path).catch(() => {});
+      res.status(429).json({ error: 'The server queue is full. Please try again in a few minutes.' });
+      return;
     }
 
-    let ignoreColors = [];
-    if (req.body.ignoreColors) {
-      try {
-        ignoreColors = JSON.parse(req.body.ignoreColors); // Array of {r, g, b}
-      } catch { /* ignore malformed */ }
-    }
-
-    const colorTolerance = clampNumber(Number(req.body.colorTolerance), 20, 80, 40);
-    const pageColors = await classifyPdfPages(inputBytes, excludedRegion, ignoreColors, colorTolerance);
-    const split = await createNumberedSplits(inputBytes, pageColors);
     const id = crypto.randomUUID();
-    const baseName = safeBaseName(req.file.originalname);
-    const jobDir = path.join(resultDir, id);
-    await fs.mkdir(jobDir, { recursive: true });
+    const job = createJob(id, req);
+    jobs.set(id, job);
+    enqueue(job);
+    drainQueue();
 
-    if (split.blackWhitePages.length) {
-      await fs.writeFile(path.join(jobDir, 'black-white.pdf'), split.blackWhiteBytes);
-    }
-    if (split.colorPages.length) {
-      await fs.writeFile(path.join(jobDir, 'color.pdf'), split.colorBytes);
-    }
-
-    await fs.unlink(req.file.path).catch(() => {});
-    scheduleResultCleanup(jobDir);
-
-    res.json({
-      jobId: id,
-      fileName: baseName,
-      pages: pageColors.length,
-      blackWhitePages: split.blackWhitePages,
-      colorPages: split.colorPages,
-      files: {
-        blackWhite: split.blackWhitePages.length
-          ? `/api/download/${id}/blackWhite?name=${encodeURIComponent(baseName)}`
-          : null,
-        color: split.colorPages.length
-          ? `/api/download/${id}/color?name=${encodeURIComponent(baseName)}`
-          : null
-      }
-    });
+    res.status(202).json(serializeJob(job));
   } catch (error) {
     await fs.unlink(req.file.path).catch(() => {});
     console.error(error);
-    res.status(500).json({ error: error.message || 'Could not process the PDF.' });
-  } finally {
-    activeJobs -= 1;
+    res.status(500).json({ error: error.message || 'Could not queue the PDF.' });
   }
 });
 
 app.use((error, _req, res, _next) => {
   res.status(400).json({ error: error.message || 'Upload failed.' });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  process.exit(1);
 });
 
 app.listen(port, () => {
@@ -443,9 +440,203 @@ function cleanupRateLimitBuckets(now = Date.now()) {
   }
 }
 
-function scheduleResultCleanup(jobDir) {
+function createJob(jobId, req) {
+  return {
+    jobId,
+    filePath: req.file.path,
+    fileSizeBytes: req.file.size,
+    approximateRequestBytes: req.approximateRequestBytes || req.file.size,
+    originalName: safeBaseName(req.file.originalname),
+    excludedRegion: parseExcludedRegion(req.body.excludeRegion),
+    ignoreColors: parseIgnoreColors(req.body.ignoreColors),
+    colorTolerance: clampNumber(Number(req.body.colorTolerance), 20, 80, 40),
+    status: 'queued',
+    queuedAt: Date.now(),
+    startedAt: null,
+    finishedAt: null,
+    result: null,
+    error: null
+  };
+}
+
+function parseExcludedRegion(value) {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed.x === 'number' && typeof parsed.y === 'number' &&
+        typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+      // Clamp all values strictly to [0, 1] to prevent out-of-bounds coord injection
+      return {
+        x: Math.min(1, Math.max(0, parsed.x)),
+        y: Math.min(1, Math.max(0, parsed.y)),
+        width: Math.min(1, Math.max(0, parsed.width)),
+        height: Math.min(1, Math.max(0, parsed.height))
+      };
+    }
+  } catch { /* ignore malformed */ }
+
+  return null;
+}
+
+function parseIgnoreColors(value) {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    // Validate and sanitize each color entry — reject non-numeric or out-of-range values
+    return parsed
+      .filter((c) => c && typeof c === 'object')
+      .map((c) => ({
+        r: clampNumber(Number(c.r), 0, 255, 0),
+        g: clampNumber(Number(c.g), 0, 255, 0),
+        b: clampNumber(Number(c.b), 0, 255, 0),
+        tolerance: clampNumber(Number(c.tolerance), 20, 80, 40)
+      }))
+      .filter((c) => Number.isFinite(c.r) && Number.isFinite(c.g) && Number.isFinite(c.b));
+  } catch {
+    return [];
+  }
+}
+
+function effectivePriority(job, now = Date.now()) {
+  return now - job.queuedAt > starvationTimeoutMs ? 0 : job.fileSizeBytes;
+}
+
+function enqueue(job) {
+  jobQueue.push(job);
+  sortQueue();
+}
+
+function dequeue() {
+  sortQueue();
+  return jobQueue.shift();
+}
+
+function sortQueue() {
+  const now = Date.now();
+  jobQueue.sort((a, b) => {
+    const priorityDiff = effectivePriority(a, now) - effectivePriority(b, now);
+    return priorityDiff || a.queuedAt - b.queuedAt;
+  });
+}
+
+function drainQueue() {
+  while (activeJobs < maxConcurrentJobs && jobQueue.length > 0) {
+    const job = dequeue();
+    runJob(job);
+  }
+}
+
+async function runJob(job) {
+  activeJobs += 1;
+  job.status = 'processing';
+  job.startedAt = Date.now();
+  job.error = null;
+
+  try {
+    job.result = await processQueuedPdf(job);
+    job.status = 'done';
+  } catch (error) {
+    await fs.unlink(job.filePath).catch(() => {});
+    console.error(error);
+    job.error = error.message || 'Could not process the PDF.';
+    job.status = 'failed';
+    scheduleJobExpiry(job.jobId);
+  } finally {
+    job.finishedAt = Date.now();
+    activeJobs -= 1;
+    drainQueue();
+  }
+}
+
+async function processQueuedPdf(job) {
+  const inputBytes = await fs.readFile(job.filePath);
+  const pageColors = await classifyPdfPages(inputBytes, job.excludedRegion, job.ignoreColors, job.colorTolerance);
+  const split = await createNumberedSplits(inputBytes, pageColors);
+  const baseName = job.originalName;
+  const jobDir = path.join(resultDir, job.jobId);
+  await fs.mkdir(jobDir, { recursive: true });
+
+  if (split.blackWhitePages.length) {
+    await fs.writeFile(path.join(jobDir, 'black-white.pdf'), split.blackWhiteBytes);
+  }
+  if (split.colorPages.length) {
+    await fs.writeFile(path.join(jobDir, 'color.pdf'), split.colorBytes);
+  }
+
+  await fs.unlink(job.filePath).catch(() => {});
+  scheduleResultCleanup(job.jobId, jobDir);
+
+  return {
+    jobId: job.jobId,
+    fileName: baseName,
+    pages: pageColors.length,
+    blackWhitePages: split.blackWhitePages,
+    colorPages: split.colorPages,
+    files: {
+      blackWhite: split.blackWhitePages.length
+        ? `/api/download/${job.jobId}/blackWhite?name=${encodeURIComponent(baseName)}`
+        : null,
+      color: split.colorPages.length
+        ? `/api/download/${job.jobId}/color?name=${encodeURIComponent(baseName)}`
+        : null
+    }
+  };
+}
+
+function serializeJob(job) {
+  sortQueue();
+  const idx = jobQueue.findIndex((queuedJob) => queuedJob.jobId === job.jobId);
+  const position = idx === -1 ? null : idx + 1;
+  const isLargeFile = job.fileSizeBytes > largeFileThresholdMb * 1024 * 1024;
+
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    position,
+    fileSizeBytes: job.fileSizeBytes,
+    message: jobStatusMessage(job, position, isLargeFile),
+    result: job.status === 'done' ? job.result : null,
+    error: job.status === 'failed' ? job.error : null
+  };
+}
+
+function jobStatusMessage(job, position, isLargeFile) {
+  if (job.status === 'queued') {
+    if (isLargeFile) {
+      return 'The server is currently very busy. Your large file is queued and you will be notified when it is ready.';
+    }
+    return `Server is busy. Your PDF has been added to the queue.${position ? ` Position: ${position}.` : ''}`;
+  }
+
+  if (job.status === 'processing') {
+    return 'Your PDF is now being processed.';
+  }
+
+  if (job.status === 'done') {
+    return 'Your PDF is ready to download.';
+  }
+
+  if (job.status === 'failed') {
+    return job.error || 'Could not process the PDF.';
+  }
+
+  return 'Result expired. Please upload your file again.';
+}
+
+function scheduleResultCleanup(jobId, jobDir) {
   setTimeout(() => {
-    fs.rm(jobDir, { recursive: true, force: true }).catch(() => {});
+    fs.rm(jobDir, { recursive: true, force: true })
+      .catch(() => {})
+      .finally(() => jobs.delete(jobId));
+  }, resultTtlMs).unref();
+}
+
+function scheduleJobExpiry(jobId) {
+  setTimeout(() => {
+    jobs.delete(jobId);
   }, resultTtlMs).unref();
 }
 
@@ -462,6 +653,13 @@ async function cleanupExpiredResults() {
         await fs.rm(jobDir, { recursive: true, force: true }).catch(() => {});
       }
     }));
+}
+
+async function cleanupOrphanUploads() {
+  const entries = await fs.readdir(uploadDir, { withFileTypes: true }).catch(() => []);
+  await Promise.all(entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => fs.unlink(path.join(uploadDir, entry.name)).catch(() => {})));
 }
 
 function isColorIgnored(r, g, b, ignoreColors, colorTolerance = 40) {

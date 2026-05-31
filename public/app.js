@@ -46,6 +46,11 @@ const clearRegionBtn = document.getElementById('clearRegionBtn');
 // Processing and Results UI
 const processingState = document.getElementById('processingState');
 const statusBox = document.getElementById('status');
+const processingDetail = document.getElementById('processingDetail');
+const queueMeta = document.getElementById('queueMeta');
+const notificationPrompt = document.getElementById('notificationPrompt');
+const enableNotificationsBtn = document.getElementById('enableNotificationsBtn');
+const processingRetryBtn = document.getElementById('processingRetryBtn');
 const results = document.getElementById('results');
 const origPageCountBadge = document.getElementById('origPageCountBadge');
 
@@ -67,6 +72,7 @@ let dragStart = null;
 let dragCurrent = null;
 let ignoreColors = []; // Array of {r,g,b,label?}
 let colorPickPageNum = 1;
+let queuePollTimer = null;
 
 // New UI Elements
 const eyedropperBtn = document.getElementById('eyedropperBtn');
@@ -303,6 +309,22 @@ goToPage2Btn.addEventListener('click', () => {
 
 startOverBtn.addEventListener('click', () => {
   location.reload();
+});
+
+processingRetryBtn.addEventListener('click', () => {
+  location.reload();
+});
+
+enableNotificationsBtn.addEventListener('click', async () => {
+  if (!('Notification' in window)) {
+    notificationPrompt.hidden = true;
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted' || permission === 'denied') {
+    notificationPrompt.hidden = true;
+  }
 });
 
 // Selection mode logic
@@ -990,6 +1012,7 @@ colorNextPageBtn.addEventListener('click', async () => {
 // Processing logic
 processButton.addEventListener('click', async () => {
   if (!input.files[0]) return;
+  clearQueuePoll();
 
   // Move to page 3
   page2.classList.remove('active');
@@ -999,6 +1022,7 @@ processButton.addEventListener('click', async () => {
   
   processingState.style.display = 'block';
   results.hidden = true;
+  resetProcessingState();
 
   const body = new FormData();
   body.append('pdf', input.files[0]);
@@ -1020,14 +1044,136 @@ processButton.addEventListener('click', async () => {
       throw new Error(data.error || 'Processing failed.');
     }
 
-    showResults(data);
+    if (data.jobId && data.status) {
+      trackQueuedJob(data);
+    } else {
+      showResults(data);
+    }
   } catch (error) {
-    const errObj = document.getElementById('status');
-    errObj.textContent = `Error: ${error.message}`;
-    errObj.classList.add('error');
-    document.querySelector('.spinner').style.display = 'none';
+    showProcessingError(error.message);
   }
 });
+
+function resetProcessingState() {
+  statusBox.textContent = 'Analyzing PDF...';
+  statusBox.classList.remove('error');
+  processingDetail.textContent = 'Please wait while we split your document into color and B&W streams.';
+  queueMeta.hidden = true;
+  queueMeta.textContent = '';
+  notificationPrompt.hidden = true;
+  processingRetryBtn.hidden = true;
+  const spinner = processingState.querySelector('.spinner');
+  if (spinner) spinner.style.display = 'block';
+}
+
+function trackQueuedJob(initialStatus) {
+  handleJobStatus(initialStatus);
+  maybeShowNotificationPrompt(initialStatus);
+
+  if (initialStatus.status === 'queued' || initialStatus.status === 'processing') {
+    pollJobStatus(initialStatus.jobId);
+  }
+}
+
+function maybeShowNotificationPrompt(jobStatus) {
+  if (jobStatus.status !== 'queued' && jobStatus.status !== 'processing') return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    notificationPrompt.hidden = false;
+  }
+}
+
+function pollJobStatus(jobId) {
+  let failCount = 0;
+
+  async function poll() {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Could not check job status.');
+      }
+
+      failCount = 0;
+      handleJobStatus(data);
+      if (data.status === 'queued' || data.status === 'processing') {
+        queuePollTimer = setTimeout(poll, 2000);
+      }
+    } catch (error) {
+      failCount += 1;
+      if (failCount >= 3) {
+        showProcessingError(error.message || 'Connection lost while checking job status.');
+      } else {
+        queuePollTimer = setTimeout(poll, 2000);
+      }
+    }
+  }
+
+  clearQueuePoll();
+  queuePollTimer = setTimeout(poll, 2000);
+}
+
+function handleJobStatus(data) {
+  if (data.status === 'queued') {
+    statusBox.textContent = 'Server is busy';
+    processingDetail.textContent = data.message || 'Your PDF has been added to the queue.';
+    queueMeta.textContent = data.position ? `Position in queue: ${data.position}` : 'Waiting for the next available slot';
+    queueMeta.hidden = false;
+    return;
+  }
+
+  if (data.status === 'processing') {
+    statusBox.textContent = 'Processing your PDF';
+    processingDetail.textContent = data.message || 'Your PDF is now being processed.';
+    queueMeta.hidden = true;
+    return;
+  }
+
+  if (data.status === 'done') {
+    clearQueuePoll();
+    notifyWhenDone();
+    showResults(data.result);
+    return;
+  }
+
+  if (data.status === 'failed') {
+    clearQueuePoll();
+    showProcessingError(data.error || data.message || 'Could not process the PDF.');
+    return;
+  }
+
+  if (data.status === 'expired') {
+    clearQueuePoll();
+    showProcessingError('Result expired. Please upload your file again.');
+  }
+}
+
+function notifyWhenDone() {
+  notificationPrompt.hidden = true;
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('SmartSplitPDF is ready', {
+      body: 'Your processed PDFs are ready to download.'
+    });
+  }
+}
+
+function showProcessingError(message) {
+  statusBox.textContent = `Error: ${message}`;
+  statusBox.classList.add('error');
+  processingDetail.textContent = 'Please try again when the server has capacity.';
+  queueMeta.hidden = true;
+  notificationPrompt.hidden = true;
+  processingRetryBtn.hidden = false;
+  const spinner = processingState.querySelector('.spinner');
+  if (spinner) spinner.style.display = 'none';
+}
+
+function clearQueuePoll() {
+  if (queuePollTimer) {
+    clearTimeout(queuePollTimer);
+    queuePollTimer = null;
+  }
+}
 
 // Modal Logic
 function openModal(url, isBw, title) {
