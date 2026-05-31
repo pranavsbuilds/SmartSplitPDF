@@ -20,8 +20,10 @@ npm-debug.log*
 tutorial videos/
 
 # Local agent/audit notes
+*.md
 AUDIT_LOG.md
 Agents.md
+PLAN.md
 
 # OS files
 .DS_Store
