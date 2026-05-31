@@ -38,6 +38,45 @@ body.modal-open { overflow: hidden; }
 .page-view.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+#page1 {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #e8f0f3;
+}
+#page1::before,
+#page1::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+#page1::before {
+  background:
+    radial-gradient(42% 58% at 91% 21%, rgba(181, 193, 205, 0.46) 0 37%, transparent 38%),
+    radial-gradient(43% 50% at 88% 73%, rgba(167, 182, 194, 0.42) 0 35%, transparent 36%),
+    radial-gradient(26% 28% at 74% 38%, rgba(192, 202, 212, 0.34) 0 44%, transparent 45%),
+    radial-gradient(16% 20% at 72% 84%, rgba(149, 167, 181, 0.4) 0 31%, transparent 32%);
+}
+#page1::after {
+  opacity: 0.72;
+  background:
+    radial-gradient(circle at 61% 16%, rgba(148, 163, 184, 0.5) 0 13px, transparent 14px),
+    linear-gradient(45deg, transparent 48%, rgba(148, 163, 184, 0.34) 49% 56%, transparent 57%) 56% 12% / 34px 34px no-repeat,
+    linear-gradient(135deg, transparent 44%, rgba(255, 255, 255, 0.9) 45% 55%, transparent 56%) 95% 58% / 76px 76px no-repeat,
+    linear-gradient(22deg, transparent 42%, rgba(255, 255, 255, 0.82) 43% 54%, transparent 55%) 95% 15% / 90px 90px no-repeat,
+    radial-gradient(ellipse at center, rgba(155, 171, 185, 0.44) 0 42%, transparent 43%) 85% 9% / 95px 80px no-repeat,
+    radial-gradient(ellipse at center, rgba(129, 148, 164, 0.42) 0 43%, transparent 44%) 66% 64% / 96px 76px no-repeat;
+}
+#page1 .top-nav,
+#page1 .hero,
+#page1 .why-use {
+  position: relative;
+  z-index: 1;
+}
+
 /* Header */
 .top-nav {
   display: flex; align-items: center; justify-content: space-between;
@@ -795,6 +834,21 @@ body.modal-open { overflow: hidden; }
   border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 24px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.processing-state h3.error { color: #dc2626; }
+.queue-meta {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 36px; margin-top: 18px; padding: 8px 14px;
+  border-radius: 999px; background: #eff6ff; color: #1d4ed8;
+  font-weight: 700; font-size: 0.95rem;
+}
+.notification-prompt {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  flex-wrap: wrap; margin: 20px auto 0; padding: 14px 16px;
+  max-width: 520px; border: 1px solid var(--border); border-radius: 8px;
+  background: #f8fafc; color: var(--text-main);
+}
+.queue-meta[hidden], .notification-prompt[hidden], #processingRetryBtn[hidden] { display: none; }
+#processingRetryBtn { margin-top: 20px; }
 
 /* Results */
 .results-container { display: flex; flex-direction: column; gap: 24px; }
