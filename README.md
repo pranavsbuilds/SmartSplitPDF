@@ -11,7 +11,7 @@
 - **Ignore a Color** — Pick specific colors (e.g., a logo tint) that should not trigger the "color" classification. Useful when a brand color appears on every page but you still want to print those pages in B&W.
 - **Exclude a Region** — Draw a rectangle over any area (header, logo, watermark) on the PDF preview; that region is skipped during color detection.
 - **Original Page Numbers Preserved** — Each output page is stamped with its original page number so you can match printed pages back to the source document.
-- **No Cloud Storage** — Files are processed on your local server and returned directly as Base64-encoded data. Nothing is persisted externally.
+- **Temporary Server Processing** — Files are uploaded to the Node server for processing, the source upload is deleted after analysis, and generated downloads expire automatically.
 - **4-Step Wizard UI** — Clean, guided workflow: Upload → Configure → Preview & Process → Download.
 
 ---
@@ -59,6 +59,22 @@ npm start
 ```
 
 The app will be available at **http://localhost:3000**.
+
+For production, run the app behind a host or reverse proxy that terminates HTTPS. Set `FORCE_HTTPS=true` only when the proxy forwards `X-Forwarded-Proto`.
+
+### Low-cost 1 GB server settings
+
+For a small DigitalOcean Droplet or similar 1 GB VPS, start with the conservative settings in `.env.droplet-1gb.example`:
+
+```bash
+MAX_UPLOAD_MB=15
+MAX_PDF_PAGES=80
+MAX_CONCURRENT_JOBS=1
+RESULT_TTL_MS=300000
+RATE_LIMIT_MAX=10
+```
+
+These settings keep only one PDF job active at a time, reject very large documents early, and remove generated files after 5 minutes. If the server stays stable, raise `MAX_UPLOAD_MB` or `MAX_PDF_PAGES` gradually.
 
 For debug mode (Node.js inspector):
 

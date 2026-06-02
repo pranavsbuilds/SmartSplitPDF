@@ -1,0 +1,17 @@
+# Docker Build Ignore List
+node_modules
+uploads
+.env
+.git
+.gitignore
+*.pdf
+tutorial videos
+Dockerfile
+.dockerignore
+AUDIT_LOG.md
+Agents.md
+TECHNOLOGY_AND_PROCESS.md
+PLAN.md
+PLAN 2.md
+LICENSE
+README.md

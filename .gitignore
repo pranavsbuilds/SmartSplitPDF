@@ -1,16 +1,28 @@
-# Dependency Directories
+# Dependencies
 node_modules/
 
-# Uploads & Generated Files
+# Runtime uploads and generated results
 uploads/
 
-# Environment Variables & Secrets
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+!.env.*.example
 
-# Personal Test Files
+# Logs and diagnostics
+*.log
+npm-debug.log*
+
+# Local test documents and generated media
 *.pdf
 *.png
+tutorial videos/
 
-# OS Generated Files
+# Local agent/audit notes
+AUDIT_LOG.md
+Agents.md
+
+# OS files
 .DS_Store
 Thumbs.db
